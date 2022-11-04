@@ -129,7 +129,7 @@ fig_change = make_subplots(specs=[[{"secondary_y": False}]])
 
 fig_change.update_layout(
     images=logo_layout,
-    title="The 5% tampon VAT cut - change in average price of items from September 2019 to March 2022",
+    title=f'The 5% tampon VAT cut - overall change in price of products from {dates[0].strftime("%B %Y")} to {dates[-1].strftime("%B %Y")}',
     yaxis=dict(
         title="% change",
         tickformat='.0%',  # so we get nice percentages
