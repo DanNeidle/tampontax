@@ -9,6 +9,7 @@
 
 import os
 import statistics
+import scipy
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
@@ -63,6 +64,7 @@ if len (dates) != len (cpi):
 
 print(f"CPI data: {cpi}")
 
+
 # now reading all the ONS data in
 for x in dates:
     print(f"Reading ONS data for {x.month}/{x.year}...")
@@ -100,15 +102,45 @@ print('Date, ' + str(human_dates).replace("\'", "").replace("[", "").replace("]"
 for x in prices_on_date:
     print(x.replace(",", "").replace(" ", "_") + ", " + str(prices_on_date[x]).replace("[", "").replace("]", ""))
 
-
 # for each item, calculate change in average price before/after 1 Jan
+# and calculate t-test
 change_in_average_price = []
-for item in prices_on_date:
-    prior_average = statistics.mean(prices_on_date[item][:index_for_31_dec_2020 + 1])
-    subsequent_average = statistics.mean(prices_on_date[item][index_for_31_dec_2020 + 1:])
-    change_in_average_price.append(subsequent_average - prior_average)
 
-# sort in order of price change
+# this prints t-test for all products
+months_for_t = 6
+for item in prices_on_date:
+    all_prior_months = prices_on_date[item][:index_for_31_dec_2020 + 1]
+    all_subsequent_months = prices_on_date[item][index_for_31_dec_2020 + 1:]
+    prior_average = statistics.mean(all_prior_months)
+    subsequent_average = statistics.mean(all_subsequent_months)
+    change_in_average_price.append(subsequent_average - prior_average)
+    ttest = scipy.stats.ttest_ind(all_prior_months[-months_for_t:], all_subsequent_months[:months_for_t],
+                                  equal_var=False, alternative='greater')
+    # this is t-test using Welch’s t-test (doesn't assume equal population variance)
+    # the alternative hypothesis is that the price in the pre-Jan 2021 period is greater
+    print(f"month t-test for {item}: {ttest}")
+
+# uncomment by below to construct/test
+# a synthetic product -tampons but with 1.0% higher price after 1 Jan 2001
+# prices_on_date["tampon_synthetic_pricing"] = []
+# for i in range (0, len(dates)):
+#     if i > index_for_31_dec_2020:
+#         prices_on_date["tampon_synthetic_pricing"].append(prices_on_date["TAMPONS-PACK OF 10-20"][i] + 0.01)
+#     else:
+#         prices_on_date["tampon_synthetic_pricing"].append(prices_on_date["TAMPONS-PACK OF 10-20"][i])
+#
+# # we then look at t-values for that synthetic product across all ranges of month
+# for months_for_t in range (2,17):
+#
+#     all_prior_months = prices_on_date["tampon_synthetic_pricing"][:index_for_31_dec_2020 + 1]
+#     all_subsequent_months = prices_on_date["tampon_synthetic_pricing"][index_for_31_dec_2020 + 1:]
+#     ttest = scipy.stats.ttest_ind(all_prior_months[-months_for_t:], all_subsequent_months[:months_for_t],
+#                                   equal_var=False, alternative='greater')
+#     print(f"Synthetic {months_for_t} month t-test: {ttest}")
+
+# end of synthetic analysis
+
+# prepare for bar chart by sorting in order of price change (going forward/back the same period as the t-test)
 sorted_items = [x for _,x in sorted(zip(change_in_average_price, items_to_find))]
 change_in_average_price.sort()
 
@@ -166,18 +198,18 @@ fig_prices.update_layout(
 # plot a scatter for cpi and then each specified item
 plots = [[cpi, "CPI"]]
 for x in prices_on_date:
-    plots.append([prices_on_date[x], x.capitalize()])
+    plots.append([prices_on_date[x], x])
 
 for plot in plots:
 
     # make the tampon plot visible immediately. the others only visible if clicked on
-    if "tampon" in plot[1].lower():
+    if plot[1] == "TAMPONS-PACK OF 10-20":
         visibility = True
     else:
         visibility = 'legendonly'
 
     # dashed lines for tampon and cpi plots
-    if "tampon" in plot[1].lower() or "CPI" in plot[1].lower():
+    if plot[1] == "TAMPONS-PACK OF 10-20" or plot[1] == "CPI":
         dash = "dash"
     else:
         dash = None
@@ -187,7 +219,7 @@ for plot in plots:
         y=plot[0],
         mode="lines+text+markers",  # no markers
         line=dict(dash=dash),
-        name=plot[1],
+        name=plot[1].capitalize(),
         showlegend=True,
         visible=visibility
     ),
