@@ -1,11 +1,13 @@
-# tampon VAT effect evaluator
+# tampon VAT effect evaluation
 
-# (c) Dan Neidle of Tax Policy Associates Ltd
+# (c) Dan Neidle of Tax Policy Associates Ltd, 2022
 # licensed under the GNU General Public License, version 2
 
 # all ONS data from https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/consumerpriceindicescpiandretailpricesindexrpiitemindicesandpricequotes
+# except 2019 data which is here: https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/consumerpriceindicescpiandretailpricesindexrpiitemindicesandpricequotes/itemindices2019
 # note data can't be scraped from website, as filename changes unpredictably, so instead files should be downloaded
 # and names conformed
+# also note at least one file was in binary format and had to be converted to csv
 
 import os
 import statistics
@@ -28,6 +30,7 @@ items_to_find = ["TISSUES-LARGE SIZE BOX", "DISP NAPPIES, SPEC TYPE, 20-60",
                   "BOYS T-SHIRT 3-13 YEARS", "TOOTHPASTE (SPECIFY SIZE)", "RAZOR CARTRIDGE BLADES", "TOOTHBRUSH"]
 
 items_to_find.sort()  # nice to put them in alphabetical order
+
 items_to_find.insert(0,"TAMPONS-PACK OF 10-20") # and then put tampons first
 
 # create lists for each item
@@ -82,6 +85,12 @@ for x in dates:
 
     print(f"{x.month}/{x.year}:  {prices_found}")
 
+# create t-shirt average
+prices_on_date["TSHIRT-AVERAGE"] = []
+for i in range(len(dates)):
+    comparables = [prices_on_date["WOMENS BASIC PLAIN T-SHIRT"][i], prices_on_date["MEN'S T-SHIRT SHORT SLEEVED"][i], prices_on_date["BOYS T-SHIRT 3-13 YEARS"][i]]
+    prices_on_date["TSHIRT-AVERAGE"].append(statistics.mean(comparables))
+
 # normalise data to Jan 2021
 normalising_target_date = datetime.datetime(year=2020, month=12, day=1)
 index_for_31_dec_2020 = dates.index(normalising_target_date)
@@ -108,13 +117,15 @@ change_in_average_price = []
 
 # this prints t-test for all products
 months_for_t = 6
+months_for_bar_chart = 15
+
 for item in prices_on_date:
-    all_prior_months = prices_on_date[item][:index_for_31_dec_2020 + 1]
-    all_subsequent_months = prices_on_date[item][index_for_31_dec_2020 + 1:]
-    prior_average = statistics.mean(all_prior_months)
-    subsequent_average = statistics.mean(all_subsequent_months)
+    prior_months = prices_on_date[item][:index_for_31_dec_2020 + 1]
+    subsequent_months = prices_on_date[item][index_for_31_dec_2020 + 1:]
+    prior_average = statistics.mean(prior_months[-months_for_bar_chart:])
+    subsequent_average = statistics.mean(subsequent_months[:months_for_bar_chart])
     change_in_average_price.append(subsequent_average - prior_average)
-    ttest = scipy.stats.ttest_ind(all_prior_months[-months_for_t:], all_subsequent_months[:months_for_t],
+    ttest = scipy.stats.ttest_ind(prior_months[-months_for_t:], subsequent_months[:months_for_t],
                                   equal_var=False, alternative='greater')
     # this is t-test using Welch’s t-test (doesn't assume equal population variance)
     # the alternative hypothesis is that the price in the pre-Jan 2021 period is greater
@@ -132,9 +143,9 @@ for item in prices_on_date:
 # # we then look at t-values for that synthetic product across all ranges of month
 # for months_for_t in range (2,17):
 #
-#     all_prior_months = prices_on_date["tampon_synthetic_pricing"][:index_for_31_dec_2020 + 1]
-#     all_subsequent_months = prices_on_date["tampon_synthetic_pricing"][index_for_31_dec_2020 + 1:]
-#     ttest = scipy.stats.ttest_ind(all_prior_months[-months_for_t:], all_subsequent_months[:months_for_t],
+#     prior_months = prices_on_date["tampon_synthetic_pricing"][:index_for_31_dec_2020 + 1]
+#     subsequent_months = prices_on_date["tampon_synthetic_pricing"][index_for_31_dec_2020 + 1:]
+#     ttest = scipy.stats.ttest_ind(prior_months[-months_for_t:], subsequent_months[:months_for_t],
 #                                   equal_var=False, alternative='greater')
 #     print(f"Synthetic {months_for_t} month t-test: {ttest}")
 
@@ -161,7 +172,7 @@ fig_change = make_subplots(specs=[[{"secondary_y": False}]])
 
 fig_change.update_layout(
     images=logo_layout,
-    title=f'The 5% tampon VAT cut - overall change in price of products from {dates[0].strftime("%B %Y")} to {dates[-1].strftime("%B %Y")}',
+    title=f'The 5% tampon VAT cut - overall change in price of products from {dates[index_for_31_dec_2020 - months_for_bar_chart].strftime("%B %Y")} to {dates[index_for_31_dec_2020 + months_for_bar_chart].strftime("%B %Y")}',
     yaxis=dict(
         title="% change",
         tickformat='.0%',  # so we get nice percentages
